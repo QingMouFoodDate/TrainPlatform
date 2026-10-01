@@ -26,7 +26,7 @@
 
 ## 这个仓在做什么
 
-整套系统分成三个仓：**人怎么用**（本仓）、**模型怎么训**（[QingMouTrain](https://github.com/QingMouFoodDate/QingMouTrain)）、**数据怎么采**（[QingMouCollection](https://github.com/QingMouFoodDate/QingMouCollection)）。
+整套系统分成三个仓：**人怎么用**（本仓）、**模型怎么训**（[ModelTrain](https://github.com/QingMouFoodDate/ModelTrain)）、**数据怎么采**（[QingMouCollection](https://github.com/QingMouFoodDate/QingMouCollection)）。
 
 本仓是那个**人每天要打开的地方**。
 
@@ -35,9 +35,9 @@
 换句话说：
 
 - 本仓管**控制面**——谁在什么时候、用哪批数据、哪组参数、在哪台机器上、起了什么任务。
-- [QingMouTrain](https://github.com/QingMouFoodDate/QingMouTrain) 管**执行面**——任务真的跑起来之后，容器里面发生的一切。
+- [ModelTrain](https://github.com/QingMouFoodDate/ModelTrain) 管**执行面**——任务真的跑起来之后，容器里面发生的一切。
 
-这条边界很重要，它决定了后面所有代码该写在哪个仓：**跑在服务端进程里的逻辑属于本仓，跑在训练容器里的逻辑属于 QingMouTrain。**
+这条边界很重要，它决定了后面所有代码该写在哪个仓：**跑在服务端进程里的逻辑属于本仓，跑在训练容器里的逻辑属于 ModelTrain。**
 
 ```mermaid
 flowchart TB
@@ -50,7 +50,7 @@ flowchart TB
         API["平台后端<br/>Go + Gin"]
         DB[("PostgreSQL")]
     end
-    subgraph T["QingMouTrain"]
+    subgraph T["ModelTrain"]
         JOB["K8s Job 容器<br/>YOLOX 训练 / 算子 / 导出"]
     end
 
@@ -104,7 +104,7 @@ flowchart TB
 - ❌ 可视化流水线画布 —— 数据到模型的链路本来就固定，不需要"自由编排"
 - ❌ 模型服务灰度、回滚、调用统计 —— 还没有一天要上十次线的规模
 
-> 完整范围依据见 [SCOPE.md](https://github.com/QingMouFoodDate/QingMouPRD/blob/main/SCOPE.md)。
+> 完整范围依据见 [SCOPE.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/SCOPE.md)。
 
 ---
 
@@ -163,7 +163,7 @@ QingMouInfer/
 
 本仓与另外两个仓之间的接口是**唯一事实来源**。任何一方改动，必须同步另一方——否则就会出现"平台以为传的是 A，容器以为收的是 B"这类最难查的问题。
 
-### 与 QingMouTrain：Job 规约
+### 与 ModelTrain：Job 规约
 
 | 项 | 约定 |
 | :--- | :--- |
@@ -202,14 +202,14 @@ cd web && npm install && npm run dev
 
 ## 相关文档
 
-仓库里只放代码，产品设计与全部决策依据在 [QingMouPRD](https://github.com/QingMouFoodDate/QingMouPRD)：
+仓库里只放代码，产品设计与全部决策依据在 [ProjectDocs](https://github.com/QingMouFoodDate/ProjectDocs)：
 
 | 文档 | 内容 |
 | :--- | :--- |
-| [PLAN.md](https://github.com/QingMouFoodDate/QingMouPRD/blob/main/PLAN.md) | 产品形态一页 + Issue 清单 |
-| [SCOPE.md](https://github.com/QingMouFoodDate/QingMouPRD/blob/main/SCOPE.md) | 范围界定：必做 / 工程约束 / 收敛项 |
-| [REPOS.md](https://github.com/QingMouFoodDate/QingMouPRD/blob/main/REPOS.md) | 仓库地图与跨仓契约 |
-| [PRD.md](https://github.com/QingMouFoodDate/QingMouPRD/blob/main/PRD.md) | 各模块详细需求 |
+| [PLAN.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/PLAN.md) | 产品形态一页 + Issue 清单 |
+| [SCOPE.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/SCOPE.md) | 范围界定：必做 / 工程约束 / 收敛项 |
+| [REPOS.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/REPOS.md) | 仓库地图与跨仓契约 |
+| [PRD.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/PRD.md) | 各模块详细需求 |
 
 ---
 
