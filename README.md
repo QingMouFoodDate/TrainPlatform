@@ -1,4 +1,4 @@
-# QingMouInfer · 轻眸识刻基础训练平台
+# TrainPlatform · 轻眸识刻基础训练平台
 
 > 把「一堆乱图和视频」变成「一个能用的日期识别模型」的那张工作台。
 
@@ -26,7 +26,7 @@
 
 ## 这个仓在做什么
 
-整套系统分成三个仓：**人怎么用**（本仓）、**模型怎么训**（[ModelTrain](https://github.com/QingMouFoodDate/ModelTrain)）、**数据怎么采**（[QingMouCollection](https://github.com/QingMouFoodDate/QingMouCollection)）。
+整套系统分成三个仓：**人怎么用**（本仓）、**模型怎么训**（[ModelTrain](https://github.com/QingMouFoodDate/ModelTrain)）、**数据怎么采**（[MobileClient](https://github.com/QingMouFoodDate/MobileClient)）。
 
 本仓是那个**人每天要打开的地方**。
 
@@ -42,10 +42,10 @@
 ```mermaid
 flowchart TB
     subgraph End["端侧"]
-        RN["QingMouCollection<br/>React Native<br/>采集 + 现场测模型"]
-        MP["QingMouMiniProgram<br/>微信小程序<br/>C 端，暂不排期"]
+        RN["MobileClient<br/>React Native<br/>采集 + 现场测模型"]
+        MP["WxClient<br/>微信小程序<br/>C 端，暂不排期"]
     end
-    subgraph I["QingMouInfer（本仓）"]
+    subgraph I["TrainPlatform（本仓）"]
         WEB["Web 控制台<br/>React 19"]
         API["平台后端<br/>Go + Gin"]
         DB[("PostgreSQL")]
@@ -104,7 +104,7 @@ flowchart TB
 - ❌ 可视化流水线画布 —— 数据到模型的链路本来就固定，不需要"自由编排"
 - ❌ 模型服务灰度、回滚、调用统计 —— 还没有一天要上十次线的规模
 
-> 完整范围依据见 [SCOPE.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/SCOPE.md)。
+> 完整范围依据见 [SCOPE.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/SCOPE.md)。
 
 ---
 
@@ -139,7 +139,7 @@ flowchart TB
 ## 规划目录结构
 
 ```text
-QingMouInfer/
+TrainPlatform/
 ├── cmd/
 │   └── server/              # 服务入口
 ├── internal/
@@ -185,8 +185,8 @@ QingMouInfer/
 
 ```bash
 # 依赖：Go 1.23+、Node 20+、PostgreSQL 16+、Docker
-git clone git@github.com:QingMouFoodDate/QingMouInfer.git
-cd QingMouInfer
+git clone git@github.com:QingMouFoodDate/TrainPlatform.git
+cd TrainPlatform
 
 # 一键起（含数据库与对象存储）
 docker compose -f deploy/docker-compose.yml up -d
@@ -202,14 +202,14 @@ cd web && npm install && npm run dev
 
 ## 相关文档
 
-仓库里只放代码，产品设计与全部决策依据在 [ProjectDocs](https://github.com/QingMouFoodDate/ProjectDocs)：
+仓库里只放代码，产品设计与全部决策依据在 [ProjectPRD](https://github.com/QingMouFoodDate/ProjectPRD)：
 
 | 文档 | 内容 |
 | :--- | :--- |
-| [PLAN.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/PLAN.md) | 产品形态一页 + Issue 清单 |
-| [SCOPE.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/SCOPE.md) | 范围界定：必做 / 工程约束 / 收敛项 |
-| [REPOS.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/REPOS.md) | 仓库地图与跨仓契约 |
-| [PRD.md](https://github.com/QingMouFoodDate/ProjectDocs/blob/main/PRD.md) | 各模块详细需求 |
+| [PLAN.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/PLAN.md) | 产品形态一页 + Issue 清单 |
+| [SCOPE.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/SCOPE.md) | 范围界定：必做 / 工程约束 / 收敛项 |
+| [REPOS.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/REPOS.md) | 仓库地图与跨仓契约 |
+| [PRD.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/PRD.md) | 各模块详细需求 |
 
 ---
 
