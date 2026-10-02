@@ -34,22 +34,20 @@ flowchart TD
 
 ## 二、 推荐架构分层
 
-目录结构遵循领域分层规范，除根目录核心配置文件外，子目录仅展示文件夹层级：
-
 ```text
 TrainPlatform/
-├── README.md
-├── requirements.txt / go.mod
-├── .env.example
-├── .gitignore
-└── app/
-    ├── api/
-    ├── core/
-    ├── models/
-    ├── schemas/
-    ├── services/
-    ├── engine/
-    └── storage/
+├── README.md                      # 业务后端说明文档与服务启动指引
+├── requirements.txt / go.mod      # 后端服务端依赖管理与组件定义
+├── .env.example                   # 环境配置示例模板与服务端口声明
+├── .gitignore                     # Git 忽略配置与临时文件过滤规则
+└── app/                           # 核心后端应用代码目录
+    ├── api/                       # RESTful 路由网关与各端请求控制器
+    ├── core/                      # 全局核心配置、跨域中介件与异常过滤
+    ├── models/                    # 数据库持久化实体与数据表映射模型
+    ├── schemas/                   # 数据输入输出传输对象与契约校验定义
+    ├── services/                  # 会话流转、推理代理与样本入库业务逻辑
+    ├── engine/                    # 日期语义解析、规则判定与时效推算引擎
+    └── storage/                   # 集中样本存储适配与自动化质量门禁集成
 ```
 
 ---
@@ -57,9 +55,9 @@ TrainPlatform/
 ## 三、 跨仓契约绑定
 
 本仓作为跨端通信的核心枢纽，必须保证接口协议与交付标准的严谨一致：
-- **客户端接口契约**：严格实现 [`ProjectPRD/contracts/API接口协议.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API接口协议.md) 规定的会话生命周期与推断接口；
-- **算法模型对接**：遵循 [`ProjectPRD/contracts/模型交付规约.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/模型交付规约.md) 加载由 ModelTrain 交付的标准化模型资产；
-- **数据质量底线**：资产管理与样本流转严格遵循 [`ProjectPRD/standards/数据质量规范.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md)。
+- **客户端接口契约**：严格实现 [`ProjectPRD/contracts/API.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md) 规定的会话生命周期与推断接口；
+- **算法模型对接**：遵循 [`ProjectPRD/contracts/MODEL.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md) 加载由 ModelTrain 交付的标准化模型资产；
+- **数据质量底线**：资产管理与样本流转严格遵循 [`ProjectPRD/standards/DATA_QUALITY.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/DATA_QUALITY.md)。
 
 ---
 
