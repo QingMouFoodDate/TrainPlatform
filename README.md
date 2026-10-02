@@ -17,7 +17,7 @@
 
 ### 2. 架构演进与关注重点 (Design Principles & Scope)
 - **单机轻量优先**：现阶段以保障核心业务链路走通与单机高可用为主，推荐使用轻量简洁的架构方案；复杂的分布式集群管理可视后续实际承载需求平滑演进。
-- **契约驱动解耦**：深度学习网络结构与参数训练调优聚焦于 ModelTrain，本仓重点依据统一契约（`contracts/model_contracts.md`）集成导出模型，完成业务推理调度与规则计算。
+- **契约驱动解耦**：深度学习网络结构与参数训练调优聚焦于 ModelTrain，本仓重点依据统一契约（`contracts/模型交付规约.md`）集成导出模型，完成业务推理调度与规则计算。
 
 ---
 
@@ -45,12 +45,12 @@ TrainPlatform/ (推荐目录结构参考)
 
 无论本仓采用何种技术栈实现，**对外输出的 HTTP 接口必须 100% 对齐组织中枢协议**：
 
-1. **接口规范**：严格遵循 [`ProjectPRD/contracts/api_specs.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/api_specs.md)；
+1. **接口规范**：严格遵循 [`ProjectPRD/contracts/API接口协议.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API接口协议.md)；
    - `POST /api/v1/ocr/predict`：上传图片，返回检测框坐标 `bbox`、识别文本 `text`、标准化日期与临期状态；
    - `POST /api/v1/samples/feedback`：接收前台提交的难例纠错数据；
    - `POST /api/v1/samples/batch-upload`：接收移动端采集批量上传；
 2. **数据源挂载**：直接对接同级独立暂存库 `../data/raw/`（包含 197 张黄金样本及 `manifest.jsonl`），避免大文件进 Git；
-3. **质量防线**：遵循 [`ProjectPRD/standards/数据采集审核与质量控制规范.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据采集审核与质量控制规范.md)。
+3. **质量防线**：遵循 [`ProjectPRD/standards/数据质量规范.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md)。
 
 ---
 
