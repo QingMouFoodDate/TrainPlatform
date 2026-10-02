@@ -1,72 +1,72 @@
-# TrainPlatform · 轻眸识刻业务后端与训练平台
+# TrainPlatform · 轻眸识刻业务与数据中枢
 
 > **组织归属**：`QingMouFoodDate` GitHub 组织  
-> **仓库性质**：轻眸识刻核心 Web 原型系统及多端前台的**轻量业务 API 后端与模型推理调度枢纽**  
+> **仓库性质**：轻眸识刻全系统**业务 API 网关、识别会话编排、全量样本存储与平台管控中心**
 
 ---
 
 ## 一、 核心定位与职责边界
 
-本仓库负责为轻眸识刻全系统（以 Web 原型系统为核心，兼顾后续移动端延伸）提供**稳定、标准、轻量的业务逻辑支撑与模型推理服务**。
+本仓库作为整个项目的**业务持久化、协同编排与数据管理中枢**，部署于通用业务服务器（以大容量存储、网络 I/O 与通用 CPU 为主），与承担高负载模型推理的 GPU 计算节点保持物理与逻辑解耦：
 
-### 1. 职责范围
-- **多端统一 API 服务**：为 `WebClient`（网页前台）、`WxClient`（微信小程序）、`MobileClient`（采图 App）提供高可用 RESTful 接口；
-- **核心推理转发与日期推断**：接收多端上传的包装图片，调度算法推理，并结合保质期时长推算剩余天数（计算安全/临期/过期状态）；
-- **样本资产管理与防重拦截**：管理样本流转，在接收移动端上传时集成二进制 SHA-256 与 pHash 汉明距离防重算法，拒绝劣质或换皮图片；
-- **轻量训练任务调起**：以单机优先原则，调起 `ModelTrain` 的算法训练脚本并记录模型产物版本。
+```mermaid
+flowchart TD
+    Clients["多端接入 (Web / App / 小程序)"] --> Gateway["统一 API 网关 (TrainPlatform)"]
+    Gateway --> SessionMgr["会话编排器 (RecognitionSession)"]
+    SessionMgr --> Storage["集中样本存储与资产台账"]
+    SessionMgr --> RuleEngine["日期语义解析与状态决策引擎"]
+    Gateway -.->|"转发计算密集任务"| InferRuntime["推理运行时 (独立 GPU 算力节点)"]
+    Gateway -.->|"远程调起任务"| TrainWorker["算法训练作业 (ModelTrain)"]
+```
 
-### 2. 架构演进与关注重点
-- **单机轻量优先**：现阶段以保障核心业务链路走通与单机高可用为主，推荐使用轻量简洁的架构方案；复杂的分布式集群管理可视后续实际承载需求平滑演进。
-- **契约驱动解耦**：深度学习网络结构与参数训练调优聚焦于 ModelTrain，本仓重点依据统一契约（`contracts/模型交付规约.md`）集成导出模型，完成业务推理调度与规则计算。
+### 1. 核心职责
+- **识别会话编排管理**：以 `RecognitionSession` 为单元管理单件商品多图识别生命周期，汇总跨图证据链；
+- **真实日期语义与状态决策引擎**：解析生产日期、到期日、保质期时长与存储条件，依据客观规则输出二维判定状态（标示期限判定 + 复核状态）；
+- **全量样本存储与数据管理**：在部署服务器集中存储原始样本图像资产与标注清单，提供多维检索与批处理操作；
+- **在线标注中心与质检防重**：提供 Web 端目标框标定与字符转写修正界面，集成拉普拉斯模糊初筛与 SHA-256 / pHash 查重门禁；
+- **计算调度与代理分发**：将多端上传的密集推理计算转发至 GPU 算力节点执行，并在管理后台提供模型重训练远程调度入口。
+
+### 2. 边界原则
+- 深度学习算法的组网研发、训练调优与消融实验归属于 `ModelTrain`；
+- 本仓专注于业务逻辑、数据流转、接口契约保障与系统运行时状态维护。
 
 ---
 
 ## 二、 推荐架构分层
 
-为保证代码可读性与团队协作流畅度，**推荐采用清晰的领域分层架构**。可根据实际选用框架适当调整，保持业务逻辑与接口路由解耦：
+目录结构遵循领域分层规范，除根目录核心配置文件外，子目录仅展示文件夹层级：
 
 ```text
-TrainPlatform/ (推荐目录结构参考)
-├── README.md                      # 本说明文档
-├── requirements.txt / go.mod      # 依赖包声明
-├── .env.example                   # 环境变量配置模板 (PORT, DATA_DIR, MODEL_PATH)
-├── .gitignore                     # 忽略项配置
-└── app/                           # 核心业务代码目录
-    ├── api/                       # 【路由接入层】定义 HTTP 路由端点，只负责接收参数与返回结果
-    │   └── v1/                    # v1 版本路由 (/ocr, /samples, /models)
-    ├── schemas/                   # 【契约数据层】强类型请求/响应校验模型 (对齐 ProjectPRD 契约)
-    ├── services/                  # 【业务逻辑层】核心业务处理（调用推理、保质期规则引擎、防重检测）
-    └── storage/                   # 【数据访问层】对接 ../data/raw/ 样本与数据库持久化
+TrainPlatform/
+├── README.md
+├── requirements.txt / go.mod
+├── .env.example
+├── .gitignore
+└── app/
+    ├── api/
+    ├── core/
+    ├── models/
+    ├── schemas/
+    ├── services/
+    ├── engine/
+    └── storage/
 ```
 
 ---
 
 ## 三、 跨仓契约绑定
 
-无论本仓采用何种技术栈实现，**对外输出的 HTTP 接口必须 100% 对齐组织中枢协议**：
-
-1. **接口规范**：严格遵循 [`ProjectPRD/contracts/API接口协议.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API接口协议.md)；
-   - `POST /api/v1/ocr/predict`：上传图片，返回检测框坐标 `bbox`、识别文本 `text`、标准化日期与临期状态；
-   - `POST /api/v1/samples/feedback`：接收前台提交的难例纠错数据；
-   - `POST /api/v1/samples/batch-upload`：接收移动端采集批量上传；
-2. **数据源挂载**：直接对接同级独立暂存库 `../data/raw/`（包含 197 张黄金样本及 `manifest.jsonl`），避免大文件进 Git；
-3. **质量防线**：遵循 [`ProjectPRD/standards/数据质量规范.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md)。
+本仓作为跨端通信的核心枢纽，必须保证接口协议与交付标准的严谨一致：
+- **客户端接口契约**：严格实现 [`ProjectPRD/contracts/API接口协议.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API接口协议.md) 规定的会话生命周期与推断接口；
+- **算法模型对接**：遵循 [`ProjectPRD/contracts/模型交付规约.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/模型交付规约.md) 加载由 ModelTrain 交付的标准化模型资产；
+- **数据质量底线**：资产管理与样本流转严格遵循 [`ProjectPRD/standards/数据质量规范.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md)。
 
 ---
 
 ## 四、 技术选型参考
 
-结合项目实际需求与工程轻量原则，推荐以下实现路线：
-- **路线 A (推荐 · 敏捷高效)**：`Python (FastAPI + Uvicorn)`
-  - *优势*：与算法导出的 ONNX Runtime 天然无缝衔接，开发速度快，生态成熟，配合 Pydantic 可秒级对齐 API 契约；
-- **路线 B (高并发演进)**：`Go (Gin)`
-  - *优势*：编译为单二进制，内存占用低、高并发能力强。
-- **配置与数据**：推荐优先使用 `.env` 管理路径与端口；数据库初期推荐 `SQLite`（零运维）或轻量 `PostgreSQL`。
-
----
-
-## 五、 阶段目标
-
-- [ ] **阶段 1：Mock 接口联调**：服务能够启动，并在 `/api/v1/ocr/predict` 上返回符合契约格式的 Mock 模拟数据，供 `WebClient` 前端立即联调；
-- [ ] **阶段 2：真实推理对接**：服务能够载入 `ModelTrain` 交付的 ONNX 模型，对上传的原图完成真实打码圈框与日期推断；
-- [ ] **阶段 3：样本流转管理**：实现采集样本入库与难例纠错记录。
+- **路线 A（推荐 · 敏捷全栈）**：`Python (FastAPI + SQLAlchemy + Pydantic) + Vue 3 后台管理前端`
+  - *优势*：原生异步支持高并发图像流转，与算法生态语言一致，自带 OpenAPI 交互文档与强类型参数校验。
+- **路线 B（备选 · 高并发编译型中枢）**：`Go (Gin / Go-Zero + GORM) + React 后台管理前端`
+  - *优势*：编译为单二进制，内存占用低，在作为大吞吐业务 API 网关和文件服务时表现优异。
+- **持久化配置**：元数据初期推荐使用 `SQLite` 或 `PostgreSQL`，样本图片统一挂载于服务端集中存储目录。
