@@ -1,70 +1,253 @@
 # TrainPlatform · 轻眸识刻业务与数据中枢
 
-> **组织归属**：`QingMouFoodDate` GitHub 组织  
-> **仓库性质**：轻眸识刻全系统**业务 API 网关、识别会话编排、全量样本存储与平台管控中心**
+> 面向多端客户端的识别会话编排、推理适配、证据聚合与标示状态决策平台
+
+TrainPlatform 是系统的在线业务运行时和数据中枢，统一承接 WebClient、MobileClient 与 WxClient 的请求。平台负责会话生命周期、图片资产管理、推理服务调用、证据聚合、日期语义推导和人工纠偏，不直接承担深度学习模型训练。
 
 ---
 
-## 一、 核心定位与职责边界
+## 一、产品定位与职责边界
 
-本仓库作为整个项目的**业务持久化、协同编排与数据管理中枢**，部署于通用业务服务器（以大容量存储、网络 I/O 与通用 CPU 为主），与承担高负载模型推理的 GPU 计算节点保持物理与逻辑解耦：
+### 1. 核心职责
+
+- **统一 API 接入**：为三类客户端提供会话、图片、结果、纠偏和模型元数据接口；
+- **识别会话编排**：管理一件食品的多图上传、增量识别、状态变化和结果查询；
+- **推理服务适配**：调用本地或远程 Inference Runtime，并将模型输出转换为统一的 `Observation`；
+- **证据聚合与决策**：从机器观察值提取结构化证据，结合日期规则输出标示状态和复核状态；
+- **样本与纠偏管理**：保存原始机器结果与人工修正的对应关系，并将通过质量审核的难例标记为训练候选；
+- **模型版本管理**：校验并加载符合模型契约的模型资产，记录模型版本和运行时信息。
+
+### 2. 不负责的内容
+
+- 不负责深度学习网络组网、训练调优和消融实验；
+- 不在客户端或业务平台重复实现模型内部算法；
+- 不把人工纠偏样本未经审核直接加入训练集；
+- 不向客户端直接暴露数据库、模型文件系统或内部存储路径。
+
+`ModelTrain` 负责离线算法研发和模型交付；TrainPlatform 负责在在线运行时加载、调用和管理已发布模型。
+
+---
+
+## 二、端到端业务流程
 
 ```mermaid
 flowchart TD
-    Clients["多端接入 (Web / App / 小程序)"] --> Gateway["统一 API 网关 (TrainPlatform)"]
-    Gateway --> SessionMgr["会话编排器 (RecognitionSession)"]
-    SessionMgr --> Storage["集中样本存储与资产台账"]
-    SessionMgr --> RuleEngine["日期语义解析与状态决策引擎"]
-    Gateway -.->|"转发计算密集任务"| InferRuntime["推理运行时 (独立 GPU 算力节点)"]
-    Gateway -.->|"远程调起任务"| TrainWorker["算法训练作业 (ModelTrain)"]
+    A["客户端请求"] --> B["创建或恢复 RecognitionSession"]
+    B --> C["接收图片与质量校验"]
+    C --> D["调用 Inference Runtime"]
+    D --> E["归档 Observation"]
+    E --> F["提取并聚合 Evidence"]
+    F --> G["日期语义推导与状态决策"]
+    G --> H["返回 Decision 与复核提示"]
+    H -.->|"人工纠偏"| I["保存修正并重新计算"]
+    I --> E
+    I -.-> J["质量审核后的训练候选"]
 ```
 
-### 1. 核心职责
-- **识别会话编排管理**：以 `RecognitionSession` 为单元管理单件商品多图识别生命周期，汇总跨图证据链；
-- **真实日期语义与状态决策引擎**：解析生产日期、到期日、保质期时长与存储条件，依据客观规则输出二维判定状态（标示期限判定 + 复核状态）；
-- **全量样本存储与数据管理**：在部署服务器集中存储原始样本图像资产与标注清单，提供多维检索与批处理操作；
-- **在线标注中心与质检防重**：提供 Web 端目标框标定与字符转写修正界面，集成拉普拉斯模糊初筛与 SHA-256 / pHash 查重门禁；
-- **计算调度与代理分发**：将多端上传的密集推理计算转发至 GPU 算力节点执行，并在管理后台提供模型重训练远程调度入口。
+系统按以下领域实体组织数据：
 
-### 2. 边界原则
-- 深度学习算法的组网研发、训练调优与消融实验归属于 `ModelTrain`；
-- 本仓专注于业务逻辑、数据流转、接口契约保障与系统运行时状态维护。
+| 实体 | 说明 |
+| :--- | :--- |
+| `RecognitionSession` | 一件食品的一次多图识别会话 |
+| `Image` | 会话中上传的单张包装图像 |
+| `Observation` | 推理服务返回的检测框、置信度和 OCR 转录等机器观察值 |
+| `Evidence` | 从观察值提取的生产日期、到期日、保质期或储存条件等结构化证据 |
+| `Decision` | 标示期限状态、复核状态和引导提示组成的业务决策 |
+
+平台输出的是包装上的**标示状态**，不替代食品安全检测，也不直接判断食品是否绝对安全或适宜食用。
 
 ---
 
-## 二、 推荐架构分层
+## 三、运行时架构
+
+```mermaid
+flowchart LR
+    subgraph Clients["客户端"]
+        WEB["WebClient"]
+        APP["MobileClient"]
+        WX["WxClient"]
+    end
+
+    subgraph Platform["TrainPlatform"]
+        API["API 接入层"]
+        SESSION["会话编排层"]
+        INTEGRATION["推理适配层"]
+        DECISION["证据与决策层"]
+        STORAGE["资产与纠偏层"]
+    end
+
+    RUNTIME["Inference Runtime"]
+    MODEL["ModelTrain 交付模型包"]
+
+    Clients --> API
+    API --> SESSION
+    SESSION --> INTEGRATION
+    INTEGRATION --> RUNTIME
+    RUNTIME --> INTEGRATION
+    INTEGRATION --> DECISION
+    DECISION --> STORAGE
+    MODEL -.->|"离线交付"| RUNTIME
+    STORAGE --> SESSION
+```
+
+Inference Runtime 可以与 TrainPlatform 部署在同一台机器，也可以作为独立服务部署。部署形态变化不应改变客户端 API、领域实体和模型输入输出契约。
+
+---
+
+## 四、核心模块
+
+### 1. API 接入层
+
+- 校验请求参数、图片格式和大小；
+- 提供统一响应结构、错误码和 `request_id`；
+- 处理跨域、超时、限流和访问控制；
+- 不向外部暴露内部文件路径和基础设施细节。
+
+### 2. 会话编排层
+
+- 创建、恢复和查询识别会话；
+- 支持同一会话追加多张不同角度图片；
+- 管理上传、处理中、部分结果、完成、复核和失败等状态；
+- 处理重复请求和幂等标识；
+- 在新增图片或纠偏后重新聚合会话证据。
+
+### 3. 推理适配层
+
+- 调用本地或远程 Inference Runtime；
+- 校验模型版本和输入输出结构；
+- 统一处理推理超时、不可用和格式异常；
+- 记录模型版本、运行时版本和必要的耗时信息；
+- 将模型输出转换为稳定的 `Observation` 结构。
+
+### 4. 证据与决策层
+
+- 从观察值中提取日期、保质期和储存条件；
+- 聚合多张图片中的互补证据；
+- 区分证据缺失、证据冲突和低置信度；
+- 依据服务端日期规则输出标示状态；
+- 生成补拍、补录和人工复核提示。
+
+### 5. 资产与纠偏层
+
+- 管理原始图片、观察值、证据和决策之间的关联；
+- 保存机器结果与人工修正结果；
+- 对重复、模糊或不完整资产执行质量门禁；
+- 将符合条件的难例标记为训练候选，而不是自动发布为训练数据。
+
+---
+
+## 五、会话与业务状态
+
+### 1. 会话处理状态
+
+```text
+AWAITING_INPUT
+RECEIVING_IMAGES
+PROCESSING
+PARTIAL_RESULT
+COMPLETED
+NEEDS_REVIEW
+FAILED
+EXPIRED
+```
+
+### 2. 标示状态
+
+```text
+WITHIN_MARKED_PERIOD
+NEAR_EXPIRY
+PAST_MARKED_PERIOD
+UNDETERMINED
+```
+
+### 3. 复核状态
+
+```text
+EVIDENCE_COMPLETE
+INFORMATION_MISSING
+EVIDENCE_CONFLICT
+LOW_CONFIDENCE
+```
+
+会话处理状态表示系统处理进度；标示状态和复核状态表示业务决策结果。推理失败不应被伪装成 `UNDETERMINED`，接口也不应在失败时返回成功形状的结果。
+
+---
+
+## 六、跨仓契约
+
+平台必须遵守以下系统级契约：
+
+- 客户端接口：[API 接口契约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md)
+- 模型输入输出与交付包：[模型交付规约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)
+- 数据实体：[数据模型](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)
+- 数据质量：[数据质量规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/DATA_QUALITY.md)
+
+主要接口类别包括：
+
+- `POST /api/v1/sessions`：创建识别会话；
+- `POST /api/v1/sessions/{session_id}/images`：上传图片并增量识别；
+- `GET /api/v1/sessions/{session_id}`：获取完整会话、证据和决策；
+- `POST /api/v1/sessions/{session_id}/correction`：提交人工纠偏并重新计算；
+- `GET /api/v1/models/latest`：查询移动端可用的模型元数据。
+
+上传、纠偏和重试流程应支持幂等处理；多图追加后必须重新聚合证据，不能只返回孤立的单图结果。
+
+---
+
+## 七、数据与安全边界
+
+- 对上传文件执行扩展名、媒体类型、内容和大小校验；
+- 通过访问控制限制会话、图片和纠偏记录的读取范围；
+- 原始图片和模型资产使用受控存储，不在公开响应中暴露物理路径；
+- 业务数据库保存元数据和关联关系，图片与模型文件由独立资产存储管理；
+- 日志不记录原始图片、完整敏感文本或不必要的用户信息；
+- 模型加载前校验版本、哈希和输入输出结构；
+- 对失败任务、过期会话和临时文件提供清理策略；
+- 具体存储位置由部署环境配置，不在公开文档中固定本地目录。
+
+---
+
+## 八、工程结构
 
 ```text
 TrainPlatform/
-├── README.md                      # 业务后端说明文档与服务启动指引
-├── requirements.txt / go.mod      # 后端服务端依赖管理与组件定义
-├── .env.example                   # 环境配置示例模板与服务端口声明
-├── .gitignore                     # Git 忽略配置与临时文件过滤规则
-└── app/                           # 核心后端应用代码目录
-    ├── api/                       # RESTful 路由网关与各端请求控制器
-    ├── core/                      # 全局核心配置、跨域中介件与异常过滤
-    ├── models/                    # 数据库持久化实体与数据表映射模型
-    ├── schemas/                   # 数据输入输出传输对象与契约校验定义
-    ├── services/                  # 会话流转、推理代理与样本入库业务逻辑
-    ├── engine/                    # 日期语义解析、规则判定与时效推算引擎
-    └── storage/                   # 集中样本存储适配与自动化质量门禁集成
+├── README.md
+├── requirements.txt / pyproject.toml
+├── .env.example
+└── app/
+    ├── api/                 # REST 路由和请求控制器
+    ├── core/                # 配置、认证、跨域和异常处理
+    ├── models/              # 持久化实体和数据表映射
+    ├── schemas/             # 请求响应模型和契约校验
+    ├── services/            # 会话、推理代理和纠偏服务
+    ├── engine/              # 日期语义与标示状态决策
+    └── storage/             # 资产存储和质量门禁适配
 ```
 
----
-
-## 三、 跨仓契约绑定
-
-本仓作为跨端通信的核心枢纽，必须保证接口协议与交付标准的严谨一致：
-- **客户端接口契约**：严格实现 [`ProjectPRD/contracts/API.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md) 规定的会话生命周期与推断接口；
-- **算法模型对接**：遵循 [`ProjectPRD/contracts/MODEL.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md) 加载由 ModelTrain 交付的标准化模型资产；
-- **数据质量底线**：资产管理与样本流转严格遵循 [`ProjectPRD/standards/DATA_QUALITY.md`](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/DATA_QUALITY.md)。
+以上目录以 Python 实现为例；采用 Go 路线时，应按对应工程规范调整目录和依赖。无论采用哪种实现语言，API、领域实体、状态枚举和跨仓契约保持稳定。
 
 ---
 
-## 四、 技术选型参考
+## 九、技术选型
 
-- **路线 A（推荐 · 敏捷全栈）**：`Python (FastAPI + SQLAlchemy + Pydantic) + Vue 3 后台管理前端`
-  - *优势*：原生异步支持高并发图像流转，与算法生态语言一致，自带 OpenAPI 交互文档与强类型参数校验。
-- **路线 B（备选 · 高并发编译型中枢）**：`Go (Gin / Go-Zero + GORM) + React 后台管理前端`
-  - *优势*：编译为单二进制，内存占用低，在作为大吞吐业务 API 网关和文件服务时表现优异。
-- **持久化配置**：元数据初期推荐使用 `SQLite` 或 `PostgreSQL`，样本图片统一挂载于服务端集中存储目录。
+### 路线 A：Python FastAPI + SQLAlchemy + Pydantic
+
+- *优势*：与算法研发共享 Python 生态，适合图像处理、模型适配和快速构建异步 API；
+- *适用场景*：需要快速迭代会话编排、推理代理和规则服务的项目。
+
+### 路线 B：Go + Gin / Go-Zero + GORM
+
+- *优势*：编译型交付、运行时依赖较少，适合高吞吐 API 网关和文件服务；
+- *适用场景*：后端团队以 Go 为主，且推理服务通过独立 HTTP 或 RPC 服务提供的项目。
+
+元数据存储可根据规模选择 SQLite 或 PostgreSQL；技术路线不改变客户端 API、日期决策规则和模型交付契约。
+
+---
+
+## 十、相关文档
+
+- [系统需求](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/REQUIREMENTS.md)
+- [系统架构](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/ARCHITECTURE.md)
+- [API 接口契约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md)
+- [数据模型](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)
+- [模型交付规约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)
