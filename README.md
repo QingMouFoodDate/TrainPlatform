@@ -1,223 +1,137 @@
-# TrainPlatform · 轻眸识刻业务与数据中枢
+# TrainPlatform · 轻眸识刻集成调度训练平台
 
-> 面向多端客户端的识别会话编排、推理适配、证据聚合与标示状态决策平台
+> 面向内部数据治理、标注质量审核、单机训练任务调度和模型登记发布的设计仓库
 
-TrainPlatform 目标定位为系统的在线业务运行时和数据中枢，统一承接 WebClient、MobileClient 与 WxClient 的请求。平台规划负责会话生命周期、图片资产管理、推理服务调用、证据聚合、日期语义推导和人工纠偏，不直接承担深度学习模型训练。
+TrainPlatform 定位为模型生产与治理平台：管理样本、冻结数据集及标注、调度 `ModelTrain` 执行入口，登记评测与模型血缘，负责 `register / validate / release`。面向客户端的 API、会话、在线前向推理与日期决策归 `InferPlatform`，不属于本仓。
 
-## 当前状态
+## 当前状态与 M0 边界
 
-当前仓库主要维护在线业务后端与业务编排平台的职责、接口和实现规划，
-当前文档不足以证明已有可运行业务实现。具体能力以代码、测试和发布记录为准；
-模型前向推理由独立 Inference Runtime 负责。
+现有 8 仓（`.github`、`ProjectPRD`、`TrainPlatform`、`InferPlatform`、`ModelTrain`、`WebClient`、`MobileClient`、`WxClient`）保持不新增、不合并、不重命名，统一处于**设计阶段，M0 待实现**。本 README 描述职责和验收约束，不能证明已有平台、训练结果、模型包或发布能力；实际能力以代码、测试、实验产物和发布记录为准。
 
----
+M0 可先用 `ModelTrain` 的 CLI 单机入口训练、评测和导出候选包，再手工审核、登记并留存治理记录；**完整 Train 管理平台不是 M0 前置条件**。容器、Kubernetes、全部研究实验、多端和端侧模型也不是 M0 前置条件。手工流程仍须满足冻结、防泄漏、血缘与发布门禁。M0 是 C0 单图切片，不等于完整 C0；多图与完整纠偏审核回流保留为后续 C0，MobileClient/WxClient 暂停实现但保留原仓。
 
-## 一、产品定位与职责边界
+## 一、职责、核心模块与实体
 
-### 1. 核心职责
-
-- **统一 API 接入**：为三类客户端提供会话、图片、结果、纠偏和模型元数据接口；
-- **识别会话编排**：管理一件食品的多图上传、增量识别、状态变化和结果查询；
-- **推理服务适配**：调用本地或远程 Inference Runtime，并将模型输出转换为统一的 `Observation`；
-- **证据聚合与决策**：从机器观察值提取结构化证据，结合日期规则输出标示状态和复核状态；
-- **样本与纠偏管理**：保存原始机器结果与人工修正的对应关系，并将通过质量审核的难例标记为训练候选；
-- **模型版本管理**：记录已发布模型的版本、校验和与运行时引用，不直接加载模型文件执行前向推理。
-
-### 2. 不负责的内容
-
-- 不负责深度学习网络组网、训练调优和消融实验；
-- 不在客户端或业务平台重复实现模型内部算法；
-- 不把人工纠偏样本未经审核直接加入训练集；
-- 不向客户端直接暴露数据库、模型文件系统或内部存储路径。
-
-`ModelTrain` 负责离线算法研发和模型交付；`Inference Runtime` 负责加载已发布模型并执行在线推理；TrainPlatform 负责管理模型版本引用、调用推理服务和处理业务结果。
-
----
-
-## 二、端到端业务流程
-
-```mermaid
-flowchart TD
-    A["客户端请求"] --> B["创建或恢复 RecognitionSession"]
-    B --> C["接收图片与质量校验"]
-    C --> D["调用 Inference Runtime"]
-    D --> E["归档 Observation"]
-    E --> F["提取并聚合 Evidence"]
-    F --> G["日期语义推导与状态决策"]
-    G --> H["返回 Decision 与复核提示"]
-    H -.->|"人工纠偏"| I["应用修正并重新计算当前决策"]
-    I --> E
-    I -.-> J["质量审核后的训练候选"]
-```
-
-系统按以下领域实体组织数据：
-
-| 实体 | 说明 |
+| 模块 | 设计职责 |
 | :--- | :--- |
-| `RecognitionSession` | 一件食品的一次多图识别会话 |
-| `Image` | 会话中上传的单张包装图像 |
-| `Observation` | 推理服务返回的检测框、置信度和 OCR 转录等机器观察值 |
-| `Evidence` | 从观察值提取的生产日期、到期日、保质期或储存条件等结构化证据 |
-| `Decision` | 标示期限状态、复核状态和引导提示组成的业务决策 |
+| 样本与资产 | 内部入库、质量门禁、来源与许可核验、文件登记和删除保护 |
+| 数据集 | 版本成员、分组切分、防泄漏校验，冻结数据、标注和 split |
+| 标注与审核 | 标注任务、修订历史、审核与返工；审核通过才可晋为训练候选 |
+| 训练任务 | 单机排队、资源检查、调用 ModelTrain、状态与 attempt 跟踪、受控重试 |
+| 评测登记 | 登记 ModelTrain 产生的 EvalRecord、配置、指标、环境和实验关联 |
+| 模型治理 | ModelBundle 登记、不可变血缘、validate 与 release 审核留痕 |
 
-平台输出的是包装上的**标示状态**，不替代食品安全检测，也不直接判断食品是否绝对安全或适宜食用。
+不自行组网、实现训练算法或执行在线前向推理；算法执行归 `ModelTrain`，在线 Runtime 是 `InferPlatform` 内部模块。不提供客户端会话、Evidence、Decision 或日期规则实现，不把线上纠偏直接变为训练标签，不自动训练或自动激活模型。
 
----
+以下保留内部领域实体；字段、枚举和序列化格式统一由上位 [DATA](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)、[TRAINING](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/TRAINING.md) 与 [MODEL](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md) 定义，本仓不另建 DTO 规格。
 
-## 三、运行时架构
-
-```mermaid
-flowchart LR
-    subgraph Clients["客户端"]
-        WEB["WebClient"]
-        APP["MobileClient"]
-        WX["WxClient"]
-    end
-
-    subgraph Platform["TrainPlatform"]
-        API["API 接入层"]
-        SESSION["会话编排层"]
-        INTEGRATION["推理适配层"]
-        DECISION["证据与决策层"]
-        STORAGE["资产与纠偏层"]
-    end
-
-    RUNTIME["Inference Runtime"]
-    MODEL["ModelTrain 交付模型包"]
-
-    Clients --> API
-    API --> SESSION
-    SESSION --> INTEGRATION
-    INTEGRATION --> RUNTIME
-    RUNTIME --> INTEGRATION
-    INTEGRATION --> DECISION
-    DECISION --> STORAGE
-    MODEL -.->|"离线交付"| RUNTIME
-    STORAGE --> SESSION
-```
-
-Inference Runtime 可以与 TrainPlatform 部署在同一台机器，也可以作为独立服务部署。部署形态变化不应改变客户端 API、领域实体和模型输入输出契约。
-
----
-
-## 四、核心模块
-
-| 模块 | 主要职责 |
+| 实体 | 职责 |
 | :--- | :--- |
-| API 接入 | 参数、图片格式/大小、统一响应、错误码、`request_id`、跨域、超时、限流和访问控制 |
-| 会话编排 | 会话创建/恢复/查询、多图追加、状态和幂等处理；新增图片或纠偏后重新聚合证据 |
-| 推理适配 | 调用 Runtime，校验模型引用和 Observation 结构，处理超时/不可用/格式异常并记录版本与耗时 |
-| 证据与决策 | 提取并聚合日期、保质期和储存条件，区分缺失/冲突/低置信度，依据日期规则生成状态和提示 |
-| 资产与纠偏 | 关联图片、Observation、Evidence、Decision，保存机器结果与人工修正，管理质量门禁和训练候选 |
+| `SampleAsset` | 受控样本及 source、许可、哈希、质量和标注引用，不等同于在线 Image |
+| `DatasetVersion` | 冻结后不可变的数据集快照，保留 ParentDataset 血缘 |
+| `DatasetVersionItem` | 版本成员关系，关联样本、split 和 group_key |
+| `LabelTask` | 指定样本范围与标注类型的标注作业 |
+| `Annotation` | 标注结果，保留标注人、时间和修订历史 |
+| `LabelReview` | 训练质量审核记录与返工原因，不等于线上业务纠偏确认 |
+| `TrainJob` | 单机执行任务、配置引用、状态、attempt 与产出引用 |
+| `EvalRecord` | 评测数据版本、模型、指标、配置和环境记录 |
+| `ModelBundle` | 候选交付包、评测引用及 ParentBundle 血缘，登记不等于发布或 active |
+| `ManagedFile` | 受控文件唯一登记与引用保护，不暴露物理路径 |
 
-平台不向外部暴露内部文件路径、数据库或基础设施细节；模型文件、哈希和张量规格由 Inference Runtime 校验。
+## 二、数据、标注与冻结约束
 
----
+- **来源与许可**：每条样本保留 source、获取方式、许可/授权与可训练用途；许可不明、未获授权或质量不合格的样本拒绝准入。许可证明与敏感原图仅留于受控环境。
+- **标注审核**：按上位 DATA 与数据质量规范创建 LabelTask，执行标注、审核、打回返工。Annotation 留存人、时间和修订号，修订不覆盖历史；未经 LabelReview 通过的标注不得用于训练。
+- **纠偏回流**：Infer 收集原始结果、Correction 和待审核记录；Train 另行审核来源许可、图像质量、标注正确性及分组。通过训练质量审核才晋为训练候选，再显式纳入新 DatasetVersion；不触发训练自动化。
+- **冻结范围**：数据资产及清单、标注修订引用、split 分配共同冻结，只读消费。任何增补、清洗、标注修正或重新切分都产生新版本，不原地改写冻结快照。
+- **ParentDataset**：新版本保留父数据集引用（如 parent_version）及变更原因；父子关系不能替代每版独立快照与完整校验。
+- **防泄漏**：以 group_key 整组分配 train / val / test。同一商品、包装批次、拍摄会话、连拍与近重复簇不得跨 split；有关联的分组须合并处理，不能仅靠随机按图片切分。分组完整性优先于比例精确，测试集不参与调参。
+- **冻结门禁**：来源许可、图像质量、审核标注覆盖、清单与哈希一致性、训练/验证集非空、group 跨 split 冲突均须检查；任一不通过拒绝冻结并记录原因。
 
-## 五、会话与业务状态
+ManagedFile 按文件内容 SHA-256 与大小校验复用，同一物理文件只登记一次，其他实体引用它；复用不能绕过来源许可或访问控制。被冻结版本、训练任务或模型血缘引用的文件不得直接删除，清理前须校验全部引用。
 
-### 1. 会话处理状态
+## 三、TrainJob 单机调度与状态
 
-```text
-AWAITING_INPUT
-RECEIVING_IMAGES
-PROCESSING
-PARTIAL_RESULT
-COMPLETED
-NEEDS_REVIEW
-FAILED
-EXPIRED
-```
+平台规划只负责组装冻结版本、训练配置、代码版本及受控执行环境，调用 ModelTrain 的任务级入口，不依赖其内部网络结构，也不要求算法入口反向调用平台内部 API。超出单机并发容量的任务排队；启动前检查 GPU/内存/磁盘，不满足资源或冻结门禁时不启动 worker。
 
-### 2. 标示状态
+任务状态限定为 `PENDING`、`RUNNING`、`SUCCEEDED`、`FAILED`、`RETRYING`、`CANCELLED`，迁移须白名单化。以下为待实现的迁移约束，具体机器契约归 TRAINING：
 
-```text
-WITHIN_MARKED_PERIOD
-NEAR_EXPIRY
-PAST_MARKED_PERIOD
-UNDETERMINED
-```
+| 当前状态 | 允许的后继状态及条件 |
+| :--- | :--- |
+| `PENDING` | `RUNNING`；启动前校验失败到 `FAILED`；取消到 `CANCELLED` |
+| `RUNNING` | 产出成功到 `SUCCEEDED`；执行失败到 `FAILED`；确认 worker 停止后到 `CANCELLED` |
+| `FAILED` | 仅符合重试策略、未超上限且旧 worker 已终止/隔离时到 `RETRYING`；最终失败不再自动迁移 |
+| `RETRYING` | 新 attempt 启动到 `RUNNING`；准备失败到 `FAILED`；取消到 `CANCELLED` |
+| `SUCCEEDED` / `CANCELLED` | 终态，不允许重复执行或通过回调回退状态 |
 
-### 3. 复核状态
+- 重试复用同一 TrainJob，仅递增 `attempt`；产出登记以 `(train_job_id, attempt)` 幂等，重复回调不得重复登记。
+- watchdog 检测心跳/超时后，必须**先终止旧 worker，或完成资源与写入权限隔离，再允许重试**；不能只改状态就启动新 worker。无法确认终止/隔离时阻止重试并转人工处置。
+- 旧 attempt 的迟到回调不得覆盖当前状态或登记为有效产出；隔离其输出并留审计记录。当前 attempt 的失败或未完整写入产物不能当成成功包登记。
+- 超过重试上限保留最终 FAILED 与原因。续训仅可使用校验通过且与冻结数据、配置和父模型相容的 checkpoint；否则明确失败，不静默更换输入。
 
-```text
-EVIDENCE_COMPLETE
-INFORMATION_MISSING
-EVIDENCE_CONFLICT
-LOW_CONFIDENCE
-```
+## 四、执行输入输出与异常
 
-会话处理状态表示系统处理进度；标示状态和复核状态表示业务决策结果。推理失败不应被伪装成 `UNDETERMINED`，接口也不应在失败时返回成功形状的结果。
+| 环节 | 输入 | 输出与失败处理 |
+| :--- | :--- | :--- |
+| 数据准入与冻结 | 内部受控资产、source/许可、标注、group 与 split | 冻结 DatasetVersion 或可追溯拒绝原因；禁止输出本地路径 |
+| 任务执行 | TrainJob/attempt、冻结版本引用、配置与代码版本、受控输出位置 | 状态、实验/评测记录、候选包引用；超时、OOM、异常退出按状态和重试策略处理 |
+| 评测与模型登记 | ModelTrain 产生的记录、候选包和血缘 | EvalRecord / ModelBundle 登记；不完整、哈希或版本不一致时拒绝有效登记 |
+| validate / release | 已登记包、评测证据、兼容性与 smoke 检查、审核意见 | 校验及发布记录；门禁失败保持未发布，不通知 Infer 激活 |
 
----
+文件位置由执行环境注入并仅用于可信 worker，管理接口与跨仓登记传递受控资产标识及版本引用，不向调用方暴露本地路径、数据库结构或部署细节。异常使用上位契约的错误码与关联标识，不在 README 自造另一套响应格式。
 
-## 六、跨仓契约
+## 五、模型登记、血缘与发布边界
 
-平台必须遵守以下系统级契约：
+登记时固化数据版本、配置哈希、代码提交、运行环境、EvalRecord、文件清单/校验和及 ParentBundle（如 parent_bundle_id）；续训或微调必须可追溯其父包。上述事实与文件不可覆盖，审核和状态变化另行追加审计记录。
 
-- 客户端接口：[API 接口契约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md)
-- 模型输入输出与交付包：[模型交付规约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)
-- 数据实体：[数据模型](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)
-- 数据质量：[数据质量规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/DATA_QUALITY.md)
-
-主要接口类别包括：
-
-- `POST /api/v1/sessions`：创建识别会话；
-- `POST /api/v1/sessions/{session_id}/images`：上传图片并增量识别；
-- `GET /api/v1/sessions/{session_id}`：获取完整会话、证据和决策；
-- `POST /api/v1/sessions/{session_id}/correction`：提交人工纠偏，立即更新当前会话决策；训练候选资格另行审核；
-- `GET /api/v1/models/latest`：查询移动端可用的模型元数据。
-
-上传、纠偏和重试流程应支持幂等处理；多图追加后必须重新聚合证据，不能只返回孤立的单图结果。
-
----
-
-## 七、数据与安全边界
-
-- 对上传文件执行扩展名、媒体类型、内容和大小校验；
-- 通过访问控制限制会话、图片和纠偏记录的读取范围；
-- 原始图片和模型资产使用受控存储，不在公开响应中暴露物理路径；
-- 业务数据库保存元数据和关联关系，图片与模型文件由独立资产存储管理；
-- 日志不记录原始图片、完整敏感文本或不必要的用户信息；
-- 校验请求使用的模型版本引用与 Runtime 返回版本一致；模型文件、哈希和张量规格校验由 Inference Runtime 负责；
-- 对失败任务、过期会话和临时文件提供清理策略；
-- 具体存储位置由部署环境配置，不在公开文档中固定本地目录。
-
----
-
-## 八、提议工程结构
-
-以下目录是实现建议，不代表当前仓库已经具备对应文件。
+发布职责链为：
 
 ```text
-TrainPlatform/
-├── README.md
-├── requirements.txt / pyproject.toml
-├── .env.example
-└── app/
-    ├── api/                 # REST 路由和请求控制器
-    ├── core/                # 配置、认证、跨域和异常处理
-    ├── models/              # 持久化实体和数据表映射
-    ├── schemas/             # 请求响应模型和契约校验
-    ├── services/            # 会话、推理代理和纠偏服务
-    ├── engine/              # 日期语义与标示状态决策
-    └── storage/             # 资产存储和质量门禁适配
+ModelTrain 候选包与评测记录
+  -> TrainPlatform register -> validate -> release
+  -> InferPlatform activate / rollback
+  -> InferPlatform 内部 Runtime 加载与执行
 ```
 
-以上目录以 Python 实现为例；采用 Go 路线时，应按对应工程规范调整目录和依赖。无论采用哪种实现语言，API、领域实体、状态枚举和跨仓契约保持稳定。
+候选包统一遵循 [MODEL 的必需文件清单](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)，本仓不复制第二棵交付目录树。validate 应检查文件完整性与哈希、字典/标签及预后处理一致性、张量规格、独立评测和 smoke 结果；通过后再经授权审核 release。
 
----
+`candidate / validated / released / deprecated` 等治理状态以 MODEL 为准，**released 不等于 Infer 的 active**。Train 不修改线上 active 指针；Infer 切换失败须保留原 active。授权且仍符合兼容性与安全要求的 N-1 旧版可回滚，不能因新版发布就删除旧包，也不能把已撤销授权的包当作回滚目标。
 
-## 九、技术选型
+## 六、安全与观测
 
-候选路线为 Python FastAPI + SQLAlchemy + Pydantic，或 Go + Gin/Go-Zero + GORM；元数据存储可按规模选择 SQLite 或 PostgreSQL。选型不改变客户端 API、日期规则、领域实体和模型交付契约。
+内部入口须限制数据、审核、执行及发布权限；审核、版本冻结、任务迁移、重试、产出登记、发布与删除均留审计记录。日志只保留必要的关联标识、版本、状态、耗时和脱敏错误，不记录原始图片、完整敏感转录、令牌或本地路径。资产和模型权重不提交到代码仓库；敏感存储位置由部署配置决定。
 
----
+## 七、提议工程结构与候选技术
 
-## 十、相关文档
+以下为 Python 路线的**提议目录**，不代表已有对应文件或实现：
 
-- [系统需求](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/REQUIREMENTS.md)
-- [系统架构](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/ARCHITECTURE.md)
-- [API 接口契约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md)
-- [数据模型](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)
-- [模型交付规约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)
+```text
+TrainPlatform/                  # 内部数据与训练治理仓库
+├── README.md                   # 职责、状态与跨仓约束说明
+├── requirements.txt            # Python 候选依赖清单
+├── .env.example                # 无秘密的配置示例
+└── app/                        # 平台实现的提议入口
+    ├── api/                    # 仅内部管理接口与权限检查
+    ├── samples/                # 来源许可、样本质量与准入
+    ├── datasets/               # 版本、分组切分和冻结校验
+    ├── labeling/               # 标注任务、修订与质量审核
+    ├── jobs/                   # 单机调度、attempt 与 watchdog
+    ├── evaluation/             # 评测记录登记与追溯
+    ├── models/                 # 模型血缘、校验与发布治理
+    ├── storage/                # 文件登记、受控引用与删除保护
+    └── core/                   # 配置、异常与观测审计
+```
+
+候选路线为 Python FastAPI + SQLAlchemy + Pydantic，或 Go + Gin/GORM；元数据可选 SQLite 或 PostgreSQL。这里只保留候选，不承诺实现、容器化或集群化，语言选择不改变冻结、调度与交付契约。
+
+## 八、上位文档与访问权限
+
+- [需求](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/REQUIREMENTS.md)、[架构](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/ARCHITECTURE.md)、[推进路线](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/ROADMAP.md)
+- [API](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/API.md)、[DATA](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)、[DATE_RULES](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATE_RULES.md)、[MODEL](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)、[TRAINING](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/TRAINING.md)
+- [研究唯一源](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/RESEARCH.md)、[数据质量](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/DATA_QUALITY.md)、[工程规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/ENGINEERING.md)
+- [ADR-001 八仓职责与在线离线边界](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/decisions/ADR-001-REPOSITORY_BOUNDARIES.md)
+
+日期规则与 DTO 仅引用上位契约，不在本仓重新定义。ADR-001 已记录批准的职责设计；具体契约仍待评审与实现，不能据此认定生产字段已冻结。DATE_RULES、TRAINING 与 MODEL 的规格和完整清单由上位文档统一维护；候选引用不代表已实现接口、训练产物或验收成果。
+
+当前仓库为私有仓库；访问 README、上位文档及 [组织主页](https://github.com/QingMouFoodDate) 的内容取决于登录、组织/仓库授权与主页可见性设置。GitHub 绝对链接不保证公共可读；未获授权时链接可能不可见，不通过公开复制原图或敏感资产解决访问问题。
+�。
