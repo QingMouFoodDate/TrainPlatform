@@ -10,9 +10,11 @@ TrainPlatform 负责离线侧“数据-实验-模型”全周期治理，承担�
 
 ## 工程状态与边界说明
 
-- **当前阶段**：处于架构规范与 M0 核心原型攻坚阶段，本仓维护离线治理与调度规范；
-- **实现范围**：M0 阶段优先通过 ModelTrain 单机 CLI 完成算法实验与候选包导出，平台级服务随 C0 演进逐步落地；
-- **契约基准**：数据结构与调度规约严格绑定上位 [DATA.md](../ProjectPRD/contracts/DATA.md)、[TRAINING.md](../ProjectPRD/contracts/TRAINING.md) 与 [MODEL.md](../ProjectPRD/contracts/MODEL.md)。
+| 维度 | 说明 |
+| :--- | :--- |
+| **当前阶段** | 处于架构规范与 M0 核心原型攻坚阶段，本仓维护离线治理与调度规范 |
+| **实现范围** | M0 阶段优先通过 ModelTrain 单机 CLI 完成算法实验与候选包导出，平台级服务随 C0 演进逐步落地 |
+| **契约基准** | 数据结构与调度规约严格绑定上位 [核心数据模型](../ProjectPRD/contracts/核心数据模型.md)、[离线训练规约](../ProjectPRD/contracts/离线训练规约.md) 与 [模型交付规约](../ProjectPRD/contracts/模型交付规约.md) |
 
 ---
 
@@ -114,7 +116,7 @@ flowchart LR
     D --> E["Inference Runtime<br/>前向计算加载"]
 ```
 
-- 候选模型包必须完整包含上位 `MODEL.md` 所要求的全部权重、字典、预处理与 smoke 验证配置；
+- 候选模型包必须完整包含上位 [模型交付规约](../ProjectPRD/contracts/模型交付规约.md) 所要求的全部权重、字典、预处理与 smoke 验证配置；
 - 发布审核代表离线模型资产治理通过，不直接改写线上运行状态；在线激活与回滚决策由 InferPlatform 自主管控。
 
 ---
@@ -142,7 +144,9 @@ TrainPlatform/                  # 训练治理与调度平台仓库
 
 ## 八、权威依据与参考文档
 
-- **系统设计与规划**：[ProjectPRD/REQUIREMENTS.md](../ProjectPRD/REQUIREMENTS.md) · [ProjectPRD/ARCHITECTURE.md](../ProjectPRD/ARCHITECTURE.md) · [ProjectPRD/ROADMAP.md](../ProjectPRD/ROADMAP.md)
-- **跨仓技术契约**：[contracts/DATA.md](../ProjectPRD/contracts/DATA.md) · [contracts/TRAINING.md](../ProjectPRD/contracts/TRAINING.md) · [contracts/MODEL.md](../ProjectPRD/contracts/MODEL.md)
-- **质量与工程规范**：[standards/DATA_QUALITY.md](../ProjectPRD/standards/DATA_QUALITY.md) · [standards/ENGINEERING.md](../ProjectPRD/standards/ENGINEERING.md)
-- **架构决策记录**：[ADR-001-REPOSITORY_BOUNDARIES.md](../ProjectPRD/decisions/ADR-001-REPOSITORY_BOUNDARIES.md)
+| 规范维度 | 事实源契约 | 核心约束说明 |
+| :--- | :--- | :--- |
+| **系统设计与规划** | [需求规格](../ProjectPRD/需求规格.md) · [系统架构](../ProjectPRD/系统架构.md) · [开发路线](../ProjectPRD/开发路线.md) | 确立系统功能边界、8 仓架构分层与 M0 迭代里程碑 |
+| **跨仓技术契约** | [核心数据模型](../ProjectPRD/contracts/核心数据模型.md) · [离线训练规约](../ProjectPRD/contracts/离线训练规约.md) · [模型交付规约](../ProjectPRD/contracts/模型交付规约.md) | 统一实体定义、单机调度规约与模型包发布门禁 |
+| **质量与工程规范** | [数据质量规范](../ProjectPRD/standards/数据质量规范.md) · [工程协作指南](../ProjectPRD/standards/工程协作指南.md) | 样本准入红线、生活容差与代码提交规约 |
+
