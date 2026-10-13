@@ -2,7 +2,7 @@
 
 > 面向数据资产治理、标注质量审核、单机训练调度与模型生命周期的中枢服务仓
 >
-> **工程状态**：设计规范完备 · M0 单图闭环推进中 · 算法执行解耦至 ModelTrain · 在线服务解耦至 InferPlatform
+> **工程状态**：M0 待实现 · 当前仅有 README，无业务代码
 
 TrainPlatform 负责离线侧“数据-实验-模型”全周期治理，承担样本合规准入、标注审核留痕、数据集版本冻结与单机训练调度职责；在线 API、实时会话与日期推导由 InferPlatform 承接。
 
@@ -12,9 +12,11 @@ TrainPlatform 负责离线侧“数据-实验-模型”全周期治理，承担�
 
 | 维度 | 说明 |
 | :--- | :--- |
-| **当前阶段** | 处于架构规范与 M0 核心原型攻坚阶段，本仓维护离线治理与调度规范 |
-| **实现范围** | M0 阶段优先通过 ModelTrain 单机 CLI 完成算法实验与候选包导出，平台级服务随 C0 演进逐步落地 |
-| **契约基准** | 数据结构与调度规约严格绑定上位 [contracts/DATA.md](../ProjectPRD/contracts/DATA.md)、[contracts/TRAINING.md](../ProjectPRD/contracts/TRAINING.md) 与 [contracts/MODEL.md](../ProjectPRD/contracts/MODEL.md) |
+| **当前阶段** | M0 待实现；六个实现仓当前均仅有 README，本仓维护离线治理与调度设计 |
+| **实现范围** | M0 先由 ModelTrain 实现单机 CLI；本仓可用手工记录审核样本、冻结版本与候选包，管理服务随后建设 |
+| **契约基准** | 数据结构与调度规约以 [contracts/DATA.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)、[contracts/TRAINING.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/TRAINING.md) 与 [contracts/MODEL.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md) 为准 |
+
+项目保留 7 个项目仓库及组织 `.github` 仓，共 8 仓；MobileClient、WxClient 暂缓实现。下文为设计规划，所列模块与目录尚未创建。
 
 ---
 
@@ -32,7 +34,7 @@ TrainPlatform 负责离线侧“数据-实验-模型”全周期治理，承担�
 
 - **算法执行隔离**：不自行编写神经网络代码或算子，模型训练、局部识别与消融实验统一归属 ModelTrain；
 - **在线业务解耦**：不直接向客户端暴露接口，不维护用户实时会话，推理运行时归属 InferPlatform；
-- **数据回流约束**：线上纠偏数据经离线合规审核与质量检验后，方可晋升为训练候选，杜绝标签自动污染。
+- **数据回流约束**：线上纠偏即时更新业务；获训练用途授权的记录经本仓独立审核后才取得训练候选资格，不自动入集、训练或发布。
 
 ---
 
@@ -58,9 +60,9 @@ flowchart TD
 
 | 实体名称 | 设计职责 |
 | :--- | :--- |
-| `SampleAsset` | 受控样本资产，记录获取渠道、许可凭据、内容哈希与质量评分 |
+| `SampleAsset` | 受控样本资产，记录获取渠道、许可凭据、内容哈希与质量审核记录 |
 | `DatasetVersion` | 冻结且不可变的数据集版本快照，完整追溯父版本血缘 |
-| `DatasetVersionItem` | 数据集成人员关系，关联样本文件、切分集标识与防泄漏分组键 |
+| `DatasetVersionItem` | 数据集成员关系，关联样本、标注修订版本、切分标识与防泄漏分组键 |
 | `LabelTask` | 标注任务单元，划定特定样本范围与目标字段标注规格 |
 | `Annotation` | 结构化标注成果，保留标注人员、时间戳与不可覆盖的修订历史 |
 | `LabelReview` | 标注质量审核记录，留存审核结论、返工原因与责任链条 |
@@ -75,29 +77,30 @@ flowchart TD
 
 ### 1. 基准数据资产与来源构成
 
-平台统一接入受控主基准数据集作为底层底表，实施不可变版本管理与血缘追溯：
+当前已采集 1523 张样本，仍在补充；采集、许可、标注与审核进度以 [DATA 第二节](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md#二离线-sampleasset) 为准。
 
-| 资产标识 | 样本量 | 来源分布 | 治理与准入状态 |
-| :--- | :---: | :--- | :--- |
-| **Master Dataset v1.0** | 1523 | 网络图片: 1207 张 (79.3%)<br>线下生活实拍: 316 张 (20.7%) | 经单张原图质检准入，完成二进制去重与 19 项标准元数据对齐，作为当前不可变基准底表 |
+| 资产标识 | 样本量 | 治理与准入状态 |
+| :--- | :---: | :--- |
+| **当前采集样本** | 1523 | 来源为网络图片与线下实拍；许可、标注、审核与分组切分完成后才能冻结 |
 
 ### 2. 准入与防泄漏治理
 
 1. **准入门禁与分级隔离体系**：
-   - 严格执行六大硬红线；严重违规样本（红圈涂鸦、广告横幅、非食品、<250px）物理隔离至 `data/team_violation/` (153张)；
-   - 普通淘汰样本（无打码配料表正面）归档至 `data/team_reject/` (155张)；
-   - 任何样本增删清洗均必须经单张肉眼审核核准，严禁未经肉眼核验批量自动化入库。
-2. **防泄漏切分原则（7:1:2 推荐比例）**：
-   - 严格以商品个体、批次、拍摄会话为聚类依据（`group_key`），同一 `group_key` 完整归入单一集合，严禁跨集合穿插；测试集严禁参与训练或超参选优；
-   - 推荐划分为：训练集 70%、验证集 10%、测试集 20%，确保长尾稀缺工艺在测试集具备足够评估统计量。
+   - 标准正样本遵循 [数据质量规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md) 的六类排除规则；负样本、难例与待审纠偏记录独立标记、审核和隔离；
+   - 按训练、评测、公开展示与再次分发核验来源许可；未审样本不得冻结，内容去重仍保留各项来源与许可记录；
+   - 逐张查看完整分辨率原图，核对检测框、可见 OCR 原文与日期语义，禁止拼图粗审或用推导补造真值。
+2. **防泄漏切分原则 · 7:1:2 推荐候选**：
+   - 同一实物、采集会话、连拍、确认的近重复及原图派生图保持同一 `group_key`，整组进入 `train / val / test` 之一；跨商品或批次泛化按评测目标增加隔离；
+   - 70% / 10% / 20% 为推荐候选，实际数量以批准的分组清单为准；报告稀缺类别的实际样本数与不确定性，比例不能保证统计置信度。
 3. **版本冻结不可变与派生血缘**：
-   - 数据清单与标注版本一经冻结即固化为只读快照；清洗或增补必须派生新版本快照，严禁原地改写历史。
+   - 数据清单与标注版本一经冻结即固化为只读快照，绑定许可、审核、哈希与切分；清洗或增补派生新版本并保留父版本关系；
+   - 先分组切分再生成训练派生图，副本继承原组与 split；测试集不参与阈值、字表、纠错权重、模型选优或量化校准。
 
 ---
 
 ## 五、单机调度状态机规范
 
-调度器采用白名单状态迁移机制，单机任务生命周期如下：
+本仓组装任务并核验执行事件，ModelTrain 执行算法。任务模式沿用 `TRAIN / EVALUATE / EXPORT`，消融通过任务与配置组合组织；输入与事件规则见 [TRAINING](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/TRAINING.md)。单机任务采用以下状态迁移：
 
 ```mermaid
 stateDiagram-v2
@@ -107,16 +110,19 @@ stateDiagram-v2
     PENDING --> CANCELLED: 手动取消
     RUNNING --> SUCCEEDED: 产物完备且校验通过
     RUNNING --> FAILED: 执行异常或超时
-    RUNNING --> CANCELLED: 确认终止执行
-    FAILED --> RETRYING: 符合受控重试策略且旧进程已隔离
+    RUNNING --> CANCELLED: 确认 worker 已停止
+    FAILED --> RETRYING: 策略允许且旧 worker 已停止或隔离
     RETRYING --> RUNNING: 启动新轮次
-    RETRYING --> FAILED: 达到重试上限
+    RETRYING --> FAILED: 准备失败或达到重试上限
+    RETRYING --> CANCELLED: 取消重试并阻止启动
     SUCCEEDED --> [*]
     CANCELLED --> [*]
 ```
 
-- 重试机制严格递增 `attempt` 计数，以 `(train_job_id, attempt)` 建立幂等追踪；
-- 看门狗触发超时或异常时，确认旧进程释放且文件写入隔离后，方可触发下一轮执行。
+- 重试递增 `attempt`，以 `(train_job_id, attempt)` 幂等登记并隔离输出；更换数据、代码、配置、环境或父包须新建任务；
+- 重复回调只登记一次；迟到旧 attempt、非法顺序及终态后事件仅留审计，不改变当前状态或登记为当前产物；
+- 看门狗记录失败后，须确认旧 worker 停止或其计算与写入权限已隔离才能重试，无法确认时转人工；运行中取消须确认停止；
+- `SUCCEEDED` 仅表示执行与必需产物校验通过，指标达标及发布另行审核；失败或不完整产物保持隔离。
 
 ---
 
@@ -132,12 +138,14 @@ flowchart LR
     D --> E["Inference Runtime<br/>前向计算加载"]
 ```
 
-- 候选模型包必须完整包含上位 [contracts/MODEL.md](../ProjectPRD/contracts/MODEL.md) 所要求的全部权重、字典、预处理与 smoke 验证配置；
-- 发布审核代表离线模型资产治理通过，不直接改写线上运行状态；在线激活与回滚决策由 InferPlatform 自主管控。
+- 候选模型包按 [contracts/MODEL.md](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md) 成套交付，核验文件哈希、独立评测、真实加载与 smoke；同版异包拒绝，内容与血缘不可覆盖；
+- `register / validate / release` 由本仓治理，审批及授权追加记录；发布不等于 active，InferPlatform 另行核验外部授权、兼容性并控制激活与回滚。
 
 ---
 
 ## 七、提议工程目录结构
+
+M0 采用单机与手工治理记录，先满足审核、追溯与资源隔离；容器作业、Kubernetes 调度等后续方案按作业量和维护成本评审。
 
 ```text
 TrainPlatform/                  # 训练治理与调度平台仓库
@@ -160,14 +168,14 @@ TrainPlatform/                  # 训练治理与调度平台仓库
 
 ## 八、相关文档
 
-- [需求规格](../ProjectPRD/需求规格.md)
-- [系统架构](../ProjectPRD/系统架构.md)
-- [开发路线](../ProjectPRD/开发路线.md)
-- [数据模型](../ProjectPRD/contracts/DATA.md)
-- [训练调度规范](../ProjectPRD/contracts/TRAINING.md)
-- [模型交付规约](../ProjectPRD/contracts/MODEL.md)
-- [数据质量规范](../ProjectPRD/standards/数据质量规范.md)
-- [工程协作指南](../ProjectPRD/standards/工程协作指南.md)
+- [需求规格](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/需求规格.md)
+- [系统架构](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/系统架构.md)
+- [开发路线](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/开发路线.md)
+- [数据模型](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/DATA.md)
+- [训练调度规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/TRAINING.md)
+- [模型交付规约](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/contracts/MODEL.md)
+- [数据质量规范](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/数据质量规范.md)
+- [工程协作指南](https://github.com/QingMouFoodDate/ProjectPRD/blob/main/standards/工程协作指南.md)
 
 
 
